@@ -34,13 +34,16 @@ def update_q(q_values, state, action, reward, next_state, alpha, gamma):
     q_values[state][action] += alpha * (reward + gamma * max_next_q - q_values[state][action])
 
 def test_different_gammas(g, gammas, iterations=1000, alpha=0.1, epsilon=0.1, runs=10):
-    cooperation_rates = []
+    state_percentages = {"CC": [], "CD": [], "DC": [], "DD": []}
+    social = []
     for gamma in gammas:
-        total_cooperation_rate = 0
+        total_social_reward = 0
+        total_state_counts = {"CC": 0, "CD": 0, "DC": 0, "DD": 0}
 
         # Run the simulation multiple times for the current gamma
         for _ in range(runs):
-            cooperation_count = 0
+            social_reward = 0
+            state_counts = {"CC": 0, "CD": 0, "DC": 0, "DD": 0}
             rewards = define_rewards(g)
             q1 = initialize_q()
             q2 = initialize_q()
@@ -64,20 +67,24 @@ def test_different_gammas(g, gammas, iterations=1000, alpha=0.1, epsilon=0.1, ru
                 update_q(q2, state[::-1], action2, reward2, next_state[::-1], alpha, gamma)
 
                 # Track cooperation
-                if action1 == "C" and action2 == "C":
-                    cooperation_count += 1
+                social_reward += (reward1 + reward2) / 2
+                state_counts[state] += 1
 
                 # Update state
                 state = next_state
 
             # Calculate cooperation rate for this run
-            total_cooperation_rate += cooperation_count / iterations
+            total_social_reward += social_reward / iterations 
+            for key in state_counts:
+                total_state_counts[key] += state_counts[key]
 
         # Average cooperation rate over all runs
-        average_cooperation_rate = total_cooperation_rate / runs
-        cooperation_rates.append(average_cooperation_rate)
+        average_social_reward = total_social_reward / runs
+        social.append(average_social_reward)
+        for key in total_state_counts:
+            state_percentages[key].append(total_state_counts[key] / (iterations * runs) * 100)
 
-    return cooperation_rates
+    return social, state_percentages
 
 # Define parameters
 g = 1.5
@@ -88,13 +95,24 @@ epsilon = 0.1
 runs = 20
 
 # Run the test
-cooperation_rates = test_different_gammas(g, gammas, iterations, alpha, epsilon, runs)
+social, state_percentages = test_different_gammas(g, gammas, iterations, alpha, epsilon, runs)
 
 # Plot the results
-plt.figure(figsize=(8, 6))
-plt.plot(gammas, cooperation_rates, marker='o')
-plt.title("Average Cooperation Rate vs. Gamma")
+plt.figure(figsize=(10, 6))
+plt.plot(gammas, social, marker='o', label="Social Reward")
+plt.title("Social Reward vs. Gamma")
 plt.xlabel("Gamma (Discount Factor)")
-plt.ylabel("Average Cooperation Rate")
+plt.ylabel("Social Reward")
 plt.grid(True)
+plt.legend()
+plt.show(block=False)
+
+plt.figure(figsize=(10, 6))
+for state, percentages in state_percentages.items():
+    plt.plot(gammas, percentages, marker='o', label=f"{state}")
+plt.title("State Percentages vs. Gamma")
+plt.xlabel("Gamma (Discount Factor)")
+plt.ylabel("State Percentage (%)")
+plt.grid(True)
+plt.legend()
 plt.show()
