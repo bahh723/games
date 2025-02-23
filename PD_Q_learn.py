@@ -7,7 +7,7 @@ import numpy as np
 # Game Parameters (ensure t > r > p > s)
 # -------------------------------
 T = 1.00   # Temptation payoff (when defecting against cooperation)
-S = 0.00   # Sucker’s payoff (when cooperating against defection)
+S = 0.00   # Sucker's payoff (when cooperating against defection)
 R = 0.10   # Reward for mutual cooperation (r < 0.5)
 P = 0.05   # Punishment for mutual defection
 
@@ -31,7 +31,7 @@ fix_p2 = False
 # -------------------------------
 # Define all possible states.
 # Each state is a 6-character string representing the joint actions of the last 3 rounds.
-# For example, "DCCDCC" represents rounds: (D,C), (CD), (CC).
+# For example, "DCCDCC" represents rounds: (D,C), (C,D), (C,C).
 # There are 2^6 = 64 possible states.
 # -------------------------------
 states = [''.join(x) for x in itertools.product('CD', repeat=6)]
@@ -43,9 +43,7 @@ def format_state(state):
     return state[0:2] + '|' + state[2:4] + '|' + state[4:6]
 
 # -------------------------------
-# Off-Diagonal Cooperation Policy for P1
-#
-# This function implements the following rules:
+# Off-Diagonal Cooperation Policy:
 # 1. If the three rounds form a cyclic permutation of ["CC", "DC", "CD"],
 #    then P1 plays the first letter of the next pair in that cycle.
 #    (E.g., state "DCCDCC" splits into ["DC", "CD", "CC"] which is a rotation of the cycle,
@@ -84,10 +82,92 @@ def off_diagonal_coop_policy_player(player):
     return lambda state: off_diagonal_coop_policy(state, player)
 
 # -------------------------------
-# All Defect Policy for P2: always play D.
+# All Defect Policy: Always play D.
 # -------------------------------
 def all_defect_policy(state):
     return 'D'
+
+
+# -------------------------------
+# Helper functions to compute initial Q values.
+# -------------------------------
+def reward_value_p1(a1, a2):
+    """Return P1's one-shot payoff when P1 plays a1 and P2 plays a2."""
+    if a1 == 'C' and a2 == 'C':
+        return R
+    elif a1 == 'C' and a2 == 'D':
+        return S
+    elif a1 == 'D' and a2 == 'C':
+        return T
+    else:  # (D, D)
+        return P
+
+def reward_value_p2(a1, a2):
+    """Return P2's one-shot payoff when P1 plays a1 and P2 plays a2.
+       Note: For the Prisoner's Dilemma, this is symmetric with roles swapped."""
+    if a1 == 'C' and a2 == 'C':
+        return R
+    elif a1 == 'C' and a2 == 'D':
+        return T
+    elif a1 == 'D' and a2 == 'C':
+        return S
+    else:  # (D, D)
+        return P
+
+def compute_continuation_values(player, policy1, policy2):
+    """
+    Solve for the fixed point V(s) for all states s, where both players follow the given policy.
+    For player 'P1', we use reward_value_p1; for 'P2', reward_value_p2.
+    """
+    state_to_index = {s: i for i, s in enumerate(states)}
+    index_to_state = {i: s for s, i in state_to_index.items()}
+    n = len(states)
+    A = np.eye(n)
+    b = np.zeros(n)
+    
+    for s in states:
+        i = state_to_index[s]
+        # Under the policy, at state s, P1 plays policy1(s) and P2 plays policy2(s)
+        a1 = policy1(s)
+        a2 = policy2(s)
+        if player == "P1":
+            r_val = reward_value_p1(a1, a2)
+        else:  # player == "P2"
+            r_val = reward_value_p2(a1, a2)
+        b[i] = r_val
+        s_next = s[2:] + a1 + a2  # next state after the joint action
+        j = state_to_index[s_next]
+        A[i, j] -= GAMMA
+    V = np.linalg.solve(A, b)
+    return {index_to_state[i]: V[i] for i in range(n)}
+
+def compute_Q_values(player, policy1, policy2):
+    """
+    Compute Q(s,a) for each state s and each action a in {C, D} for the given player.
+    
+    For P1:
+      Q(s, a) = reward_value_p1(a, policy2(s)) + GAMMA * V(s_next),
+      where s_next = s[2:] + a + policy2(s)
+      
+    For P2:
+      Q(s, a) = reward_value_p2(policy1(s), a) + GAMMA * V(s_next),
+      where s_next = s[2:] + policy1(s) + a
+    """
+    V = compute_continuation_values(player, policy1, policy2)
+    Q = {}
+    for s in states:
+        Q[s] = {}
+        for a in ['C', 'D']:
+            if player == "P1":
+                a2 = policy2(s)  # P2's action under the policy
+                r_val = reward_value_p1(a, a2)
+                s_next = s[2:] + a + a2
+            else:  # player == "P2"
+                a1 = policy1(s)  # P1's action under the policy
+                r_val = reward_value_p2(a1, a)
+                s_next = s[2:] + a1 + a
+            Q[s][a] = r_val + GAMMA * V[s_next]
+    return Q
 
 # -------------------------------
 # Q-Learning Agent Class
@@ -102,18 +182,15 @@ def all_defect_policy(state):
 # -------------------------------
 class QLearningAgent:
     def __init__(self, epsilon=EPSILON, alpha=ALPHA, gamma=GAMMA,
-                 fixed_policy=None, init_policy=None):
+                 fixed_policy=None, init_Q=None):
         self.epsilon = epsilon
         self.alpha = alpha
         self.gamma = gamma
         self.fixed_policy = fixed_policy
         self.Q = {}
         for state in states:
-            if init_policy is not None:
-                best_action = init_policy(state)
-                # Initialize the Q-value for the preferred action to 1.0 and the other to 0.0.
-                self.Q[state] = {'C': 1.0 if best_action == 'C' else 0.0,
-                                 'D': 1.0 if best_action == 'D' else 0.0}
+            if init_Q is not None:
+                self.Q = init_Q
             else:
                 self.Q[state] = {'C': 0.0, 'D': 0.0}
     
@@ -147,10 +224,10 @@ class QLearningAgent:
 # -------------------------------
 agent1 = QLearningAgent(epsilon=EPSILON, alpha=ALPHA, gamma=GAMMA,
                         fixed_policy=off_diagonal_coop_policy_player("P1") if fix_p1 else None,
-                        init_policy=off_diagonal_coop_policy_player("P1"))
+                        init_Q=compute_Q_values("P1",off_diagonal_coop_policy_player("P1"),off_diagonal_coop_policy_player("P2")))
 agent2 = QLearningAgent(epsilon=EPSILON, alpha=ALPHA, gamma=GAMMA,
                         fixed_policy=off_diagonal_coop_policy_player("P2") if fix_p2 else None,
-                        init_policy=off_diagonal_coop_policy_player("P2"))
+                        init_Q=compute_Q_values("P2",off_diagonal_coop_policy_player("P1"),off_diagonal_coop_policy_player("P2")))
 
 # -------------------------------
 # Initialize the starting state.
