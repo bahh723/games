@@ -6,13 +6,13 @@ def define_rewards(g):
     # Define the reward matrix dynamically using parameter g
     return {
         ("CC", "C", "C"): 2 * g, ("CC", "C", "D"): g,
-        ("CC", "D", "C"): 2 + g, ("CC", "D", "D"): 2,
+        ("CC", "D", "C"): 2 + g, ("CC", "D", "D"): 1.5*g,
         ("CD", "C", "C"): 2 * g, ("CD", "C", "D"): g,
-        ("CD", "D", "C"): 2 + g, ("CD", "D", "D"): 2,
+        ("CD", "D", "C"): 2 + g, ("CD", "D", "D"): 1.5*g,
         ("DC", "C", "C"): 2 * g, ("DC", "C", "D"): g,
-        ("DC", "D", "C"): 2 + g, ("DC", "D", "D"): 2,
+        ("DC", "D", "C"): 2 + g, ("DC", "D", "D"): 1.5*g,
         ("DD", "C", "C"): 2 * g, ("DD", "C", "D"): g,
-        ("DD", "D", "C"): 2 + g, ("DD", "D", "D"): 2,
+        ("DD", "D", "C"): 2 + g, ("DD", "D", "D"): 1.5*g,
     }
 
 # Initialize Q-values
@@ -50,7 +50,7 @@ def test_different_gammas(g, gammas, iterations=1000, alpha=0.1, epsilon=0.1, ru
 
             actions = ["C", "D"]
             states = ["CC", "CD", "DC", "DD"]
-            state = "DD"  # Initial state
+            state = "CC"  # Initial state
 
             for _ in range(iterations):
                 # Choose actions for both players
@@ -87,9 +87,9 @@ def test_different_gammas(g, gammas, iterations=1000, alpha=0.1, epsilon=0.1, ru
     return social, state_percentages
 
 # Define parameters
-g = 1.5
+g = 0
 gammas = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]  # Different gamma values to test
-iterations = 10000
+iterations = 20000
 alpha = 0.1
 epsilon = 0.1
 runs = 20

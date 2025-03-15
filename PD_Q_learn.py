@@ -16,9 +16,10 @@ P = 0.05   # Punishment for mutual defection
 # -------------------------------
 ALPHA = 0.1      # Learning rate
 GAMMA = 0.9      # Discount factor
-EPSILON = 0.01    # Exploration rate
+EPSILON = 0.1    # Exploration rate
 NUM_ROUNDS = 500000  # Total number of game rounds
 W = 500
+MEMORY = 3
 
 # -------------------------------
 # Option to fix a player's policy:
@@ -34,13 +35,16 @@ fix_p2 = False
 # For example, "DCCDCC" represents rounds: (D,C), (CD), (CC).
 # There are 2^6 = 64 possible states.
 # -------------------------------
-states = [''.join(x) for x in itertools.product('CD', repeat=6)]
+states = [''.join(x) for x in itertools.product('CD', repeat=2*MEMORY)]
 
 # -------------------------------
 # Helper function: Format a state for printing (split rounds by "|")
 # -------------------------------
 def format_state(state):
-    return state[0:2] + '|' + state[2:4] + '|' + state[4:6]
+    s = state[0:2]
+    for i in range(1, MEMORY):
+         s += '|' + state[2*i: 2*(i+1)]
+    return s
 
 # -------------------------------
 # Off-Diagonal Cooperation Policy for P1
@@ -55,30 +59,46 @@ def format_state(state):
 # 4. Otherwise, play D.
 # -------------------------------
 def off_diagonal_coop_policy(state, player):
-    rounds = [state[0:2], state[2:4], state[4:6]]
-    canonical_cycle = ["CC", "DC", "CD"]
+    if state[-2:] == "CD":  
+        if player=="P1": 
+            return 'D'
+        if player=="P2": 
+            return 'C'
+    elif state[-2:] == "DC": 
+        if player=="P1":
+            return 'C'
+        if player=="P2": 
+            return 'D'
+    else: 
+        return 'D'
+    
+    
+    #rounds = []
+    #for i in range(MEMORY): 
+    #    rounds.append(state[2*i: 2*(i+1)])
+    #canonical_cycle = ["CC", "DC", "CD"]
     # Check if rounds follow a cyclic permutation of the canonical cycle.
-    for r in range(3):
-        rotated = canonical_cycle[r:] + canonical_cycle[:r]
-        if rounds == rotated:
-            # Determine the next expected pair in the cycle.
-            next_pair = rotated[(2 + 1) % 3]
-            if player=="P1":
-                return next_pair[0]  # P1's action is the first letter of the pair.
-            if player=="P2":
-                return next_pair[1]  # P2's action is the second letter of the pair.
+    #for r in range(3):
+    #    rotated = canonical_cycle[r:] + canonical_cycle[:r]
+    #    if rounds == rotated:
+    #        # Determine the next expected pair in the cycle.
+    #        next_pair = rotated[(2 + 1) % 3]
+    #        if player=="P1":
+    #            return next_pair[0]  # P1's action is the first letter of the pair.
+    #        if player=="P2":
+    #            return next_pair[1]  # P2's action is the second letter of the pair.
     # If not following the cycle:
-    if state[-2:] == "CC":  # Matches XXXXCC
-        if player=="P1":
-            return 'D'
-        if player=="P2":
-            return 'C'
-    if state[2:4] == "CC" and state[4:6] == "DC":  # Matches XXCCDC
-        if player=="P1":
-            return 'C'
-        if player=="P2":
-            return 'D'
-    return 'D'
+    #if state[-2:] == "CC":  # Matches XXXXCC
+    #    if player=="P1":
+    #        return 'D'
+    #    if player=="P2":
+    #        return 'C'
+    #if state[2:4] == "CC" and state[4:6] == "DC":  # Matches XXCCDC
+    #    if player=="P1":
+    #        return 'C'
+    #    if player=="P2":
+    #        return 'D'
+    #return 'D'
 
 def off_diagonal_coop_policy_player(player):
     return lambda state: off_diagonal_coop_policy(state, player)
@@ -156,7 +176,7 @@ agent2 = QLearningAgent(epsilon=EPSILON, alpha=ALPHA, gamma=GAMMA,
 # Initialize the starting state.
 # We assume the game starts with 3 rounds of mutual cooperation: "CCCCCC"
 # -------------------------------
-current_state = "CCCCCC"
+current_state = 'C' * (2*MEMORY) 
 rewards1, rewards2 = [], []
 
 
