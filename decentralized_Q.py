@@ -3,8 +3,9 @@ import itertools
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+import copy
 
-
+np.set_printoptions(precision=5)
 
 import argparse
 # Argument parser setup
@@ -14,14 +15,16 @@ parser.add_argument("--id", type=int, required=True, help="Run number (e.g., 1, 
 parser.add_argument("--eps", type=float, required=True, help="epsilon parameter in Q learning")
 parser.add_argument("--memory", type=int, required=True, help="number of memory")
 parser.add_argument("--type", type=str, required=True, help="type of game (on or off)")
-parser.add_argument("--rounds", type=int, default=40000, help="type of game (on or off)")
+parser.add_argument("--rounds", type=int, default=400000, help="type of game (on or off)")
 args = parser.parse_args()
 current_state = args.init
 # Create output directory if it doesn't exist
 output_dir = f"results_{args.type}_memory{args.memory}_eps{args.eps}"
 os.makedirs(output_dir, exist_ok=True)
 
-
+seed = args.id  # You can customize this offset
+random.seed(seed)
+np.random.seed(seed)
 
 # -------------------------------
 # Game Parameters (ensure t > r > p > s)
@@ -105,24 +108,29 @@ class QLearningAgent:
             return self.fixed_policy(state)
         # Otherwise, use an epsilon-greedy selection based on Q-values.
         if random.random() < self.epsilon:
-            return random.choice(['C', 'D'])
+            return (random.choice(['C', 'D']), True)
         q_vals = self.Q[state]
         if q_vals['C'] == q_vals['D']:
-            # return 'D'
-            return random.choice(['C', 'D'])
-        return 'C' if q_vals['C'] > q_vals['D'] else 'D'
+            return (random.choice(['C', 'D']), False)
+        return ('C', False) if q_vals['C'] > q_vals['D'] else ('D', False)
     
-    def update(self, state, action, reward, next_state):
+    def update(self, state, action, reward, next_state, output=False, round=0, player=0):
         # If using a fixed policy, skip Q-value updates.
         if self.fixed_policy is not None:
             return
         max_next = max(self.Q[next_state].values())
+        #if output: 
+        #        print("  (before) Q[state][C]=", self.Q[state]['C'], "  Q[state][D]=", self.Q[state]['D'])
         self.Q[state][action] += self.alpha * (reward + self.gamma * max_next - self.Q[state][action])
+        if output: 
+                print("  Q[s][C]=", "{0:0.4f}".format(self.Q[state]['C']), 
+                      "  Q[s][D]=", "{0:0.4f}".format(self.Q[state]['D']), end="")
+                
 
-    def appendQdiff(self, Qdiffs): 
-        for state in states: 
-            Qdiffs[state].append(self.Q[state]['C'] - self.Q[state]['D'])
-        return Qdiffs
+    #def appendQdiff(self, Qdiffs): 
+    #    for state in states: 
+    #        Qdiffs[state].append(self.Q[state]['C'] - self.Q[state]['D'])
+    #    return Qdiffs
 # -------------------------------
 # Create Agents with the desired initial policies.
 #
@@ -144,10 +152,14 @@ agent2 = QLearningAgent(epsilon=EPSILON, alpha=ALPHA, gamma=GAMMA,
 # We assume the game starts with 3 rounds of mutual cooperation: "CCCCCC"
 # -------------------------------
 rewards1, rewards2 = [], []
-Qdiffs1, Qdiffs2 = {}, {}
-for s in states: 
-    Qdiffs1[s] = []
-    Qdiffs2[s] = []  
+Q1 = {}
+Q2 = {}
+for state in states:
+    Q1[state] = {}
+    Q2[state] = {} 
+    for action in ['C', 'D']:
+        Q1[state][action] = []
+        Q2[state][action] = [] 
 
 
 # Tracking state occurrences
@@ -158,29 +170,76 @@ window_states = []
 # -------------------------------
 # Run the Q-learning simulation.
 # -------------------------------
+
+transition_count = {"CC": {"CC": 0, "CD": 0, "DC": 0, "DD": 0 }, 
+                    "CD": {"CC": 0, "CD": 0, "DC": 0, "DD": 0 }, 
+                    "DC": {"CC": 0, "CD": 0, "DC": 0, "DD": 0 }, 
+                    "DD": {"CC": 0, "CD": 0, "DC": 0, "DD": 0 }}
+value_sum = {"CC": 0, "CD": 0, "DC": 0, "DD": 0}
+value_count = {"CC": 0, "CD": 0, "DC": 0, "DD": 0}
+
 for i in range(NUM_ROUNDS):
     # Each agent selects an action based on the current state.
-    action1 = agent1.get_action(current_state)
-    action2 = agent2.get_action(current_state)
+    action1, exp1 = agent1.get_action(current_state)
+    action2, exp2 = agent2.get_action(current_state)
     
     # Determine rewards from the one-shot Prisoner's Dilemma matrix.
-    if action1 == 'C' and action2 == 'C':
-        reward1, reward2, state_label = R, R, "CC"
-    elif action1 == 'C' and action2 == 'D':
-        reward1, reward2, state_label = S, T, "CD"
-    elif action1 == 'D' and action2 == 'C':
-        reward1, reward2, state_label = T, S, "DC"
-    elif action1 == 'D' and action2 == 'D':
-        reward1, reward2, state_label = P, P, "DD"
+    #if action1 == 'C' and action2 == 'C':
+    #    reward1, reward2, state_label = R, R, "CC"
+    #elif action1 == 'C' and action2 == 'D':
+    #    reward1, reward2, state_label = S, T, "CD"
+    #elif action1 == 'D' and action2 == 'C':
+    #    reward1, reward2, state_label = T, S, "DC"
+    #elif action1 == 'D' and action2 == 'D':
+    #    reward1, reward2, state_label = P, P, "DD"
+    
+    if current_state[-2] == 'C' and current_state[-1] == 'C':
+        reward1, reward2  = R, R 
+        state_label = "CC"
+    elif current_state[-2] == 'C' and current_state[-1] == 'D':
+        reward1, reward2  = S, T 
+        state_label = "CD"
+    elif current_state[-2] == 'D' and current_state[-1] == 'C':
+        reward1, reward2  = T, S 
+        state_label = "DC"
+    elif current_state[-2] == 'D' and current_state[-1] == 'D':
+        reward1, reward2  = P, P 
+        state_label = "DD"
+    
     rewards1.append(reward1)
     rewards2.append(reward2)
     
     # Update the state: drop the oldest round (first 2 characters) and append the current round's actions.
     next_state = current_state[2:] + action1 + action2
-    
+    if i < 1000: 
+        transition_count[current_state][next_state] += 1
+        value_sum[current_state] += max(agent1.Q[next_state].values())
+        value_count[current_state] += 1
+
+
     # Each agent updates its Q-table.
-    agent1.update(current_state, action1, reward1, next_state)
-    agent2.update(current_state, action2, reward2, next_state)
+    if current_state=="CD" and i in range(0,args.rounds):
+        if next_state != "CC": 
+            note = "*"
+        else: 
+            note = " " 
+        if exp1: 
+            note = note + " exp1 " 
+        if exp2:
+            note = note + " exp2 "
+        if (not exp1) and (not exp2): 
+            note = note + "      "
+        print("\nRound", i, current_state, "-->", next_state, note, end="")
+        #agent1.update(current_state, action1, reward1, next_state)
+        #agent2.update(current_state, action2, reward2, next_state)
+        print("1)  ", end="")
+        agent1.update(current_state, action1, reward1, next_state, output=True, round=i, player=1)
+        print("2)  ", end="")
+        agent2.update(current_state, action2, reward2, next_state, output=True, round=i, player=2)
+    else: 
+        agent1.update(current_state, action1, reward1, next_state)
+        agent2.update(current_state, action2, reward2, next_state)
+    
     
     current_state = next_state
 
@@ -193,9 +252,11 @@ for i in range(NUM_ROUNDS):
         for key in state_counts:
             state_counts[key].append(window_states.count(key) / W)
 
-    # compute Q diff
-    Qdiffs1 = agent1.appendQdiff(Qdiffs1)
-    Qdiffs2 = agent2.appendQdiff(Qdiffs2)
+    # record Q values
+    for state in states: 
+        for action in ['C', 'D']: 
+            Q1[state][action].append(agent1.Q[state][action])
+            Q2[state][action].append(agent2.Q[state][action])
 
 # Compute moving averages
 def moving_avg(data, window):
@@ -239,6 +300,18 @@ for state in sorted(states):
 # For each state, we print the state in "XX|XX|XX" format followed by the concatenated actions from P1 and P2.
 # The non-"DD" policies are printed first, then a separator, then the "DD" policies.
 # -------------------------------
+
+print("Transition count up to 1000:")
+for state in states: 
+    for nstate in states: 
+        print(state, "-->", nstate, " : ", transition_count[state][nstate], 
+              " ( ", transition_count[state][nstate] / sum(transition_count[state].values())  ," ) ")
+
+
+print("Value sum up to 1000:")
+for state in states: 
+    print(state, value_sum[state] / value_count[state])
+
 print("Learned joint policy (P1, P2):")
 for state in non_dd_states:
     print(f"{format_state(state)}: {policy1[state]}{policy2[state]}")
@@ -269,32 +342,43 @@ axes[1].set_ylabel("Proportion in Window")
 axes[1].set_title("Proportion of States in CC, CD, DC, DD over Time")
 axes[1].legend()
 
+
+
+
+
 for state in states: 
-    axes[2].plot(Qdiffs1[state], label=state, alpha=0.7)
+    for action in ['C', 'D']: 
+       axes[2].plot(Q1[state][action][:500000], label=state + ',' + action, alpha=0.7, linewidth=0.5)
 # axes[2].set_xlabel("Rounds")
-axes[2].set_ylabel("Q[state][C] - Q[state][D]")
-axes[2].set_title("Q[state][C] - Q[state][D]")
-# axes[2].set_ylim(-0.5, 0.5)  # Set y-axis range
-axes[2].legend(fontsize=4, markerscale=0.4, frameon=False, handlelength=1, loc="upper right", bbox_to_anchor=(1, 1))
+axes[2].set_ylabel("Q1(s,a)")
+axes[2].set_title("Q1(s,a)")
+axes[2].set_ylim(0.0, 10.0)  # Set y-axis range
+axes[2].legend(fontsize=4, markerscale=0.1, frameon=False, handlelength=1, loc="upper right", bbox_to_anchor=(1, 1))
+
+for state in states: 
+    for action in ['C', 'D']: 
+       axes[3].plot(Q2[state][action][:500000], label=state + ',' + action, alpha=0.7, linewidth=0.5)
+axes[3].set_ylabel("Q2(s,a)")
+axes[3].set_title("Q2(s,a)")
+axes[3].set_ylim(0.0, 10.0)  # Set y-axis range
+axes[3].legend(fontsize=4, markerscale=0.1, frameon=False, handlelength=1, loc="upper right", bbox_to_anchor=(1, 1))
 
 # Fourth "plot" (Displaying text output)
-axes[3].axis("off")  # Hide axes for text display
-text_output = "Learned joint policy (P1, P2):\n"
-count = 0
-for state in states:
-    text_output += f"{format_state(state)}: {policy1[state]}{policy2[state]}       "
-    count += 1
-    if count % 4 == 0: 
-        text_output += "\n"
-# text_output += "\n"
-# for state in dd_states:
-#     text_output += f"{format_state(state)}: {policy1[state]}{policy2[state]}       "
-axes[3].text(0.1, 0.4, text_output, fontsize=10, verticalalignment="center", family="monospace")
+#axes[3].axis("off")  # Hide axes for text display
+#text_output = "Learned joint policy (P1, P2):\n"
+#count = 0
+#for state in states:
+#    text_output += f"{format_state(state)}: {policy1[state]}{policy2[state]}       "
+#    count += 1
+#    if count % 4 == 0: 
+#        text_output += "\n"
+#axes[3].text(0.1, 0.4, text_output, fontsize=10, verticalalignment="center", family="monospace")
 
 
 
 plt.tight_layout()
 filename = os.path.join(output_dir, f"{args.init}{args.id}.png")
 plt.savefig(filename, dpi=300)
+plt.show()
 plt.close()
 print(f"{args.init}{args.id}.png")
