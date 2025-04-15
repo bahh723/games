@@ -16,6 +16,7 @@ parser.add_argument("--eps", type=float, required=True, help="epsilon parameter 
 parser.add_argument("--memory", type=int, required=True, help="number of memory")
 parser.add_argument("--type", type=str, required=True, help="type of game (on or off)")
 parser.add_argument("--rounds", type=int, default=400000, help="type of game (on or off)")
+parser.add_argument("--initstra", type=str, default='None', help="Initial strategy ('AD', 'WSLS', 'GT')")
 args = parser.parse_args()
 current_state = args.init
 # Create output directory if it doesn't exist
@@ -83,10 +84,9 @@ def format_state(state):
 # -------------------------------
 # Q-value Initialization Functions
 # -------------------------------
-def solve_q_values_all_defect(R, S, T, P, gamma, epsilon):
-    ge2 = - gamma * epsilon**2
-    gae = - gamma * epsilon * (1 - epsilon)
-    ga2 = - gamma * (1 - epsilon)**2
+def solve_q_values_AD(R, S, T, P, gamma, epsilon):
+    ge = - gamma * epsilon
+    geb = - gamma * (1 - epsilon)
 
     # Mapping from index to (state, action)
     idx_to_state_action = [
@@ -104,52 +104,36 @@ def solve_q_values_all_defect(R, S, T, P, gamma, epsilon):
     b = np.array([R, R, S, S, T, T, P, P])
 
     # Row 0: Q(CC,C)
-    A[0][0] += ge2
-    A[0][1] = gae
-    A[0][2] = gae
-    A[0][3] = ga2
+    A[0][1] = ge
+    A[0][3] = geb
 
     # Row 1: Q(CC,D)
-    A[1][4] = ge2
-    A[1][5] = gae
-    A[1][6] = gae
-    A[1][7] = ga2
+    A[1][5] = ge
+    A[1][7] = geb
 
     # Row 2: Q(CD,C)
-    A[2][0] = ge2
-    A[2][1] = gae
-    A[2][2] += gae
-    A[2][3] = ga2
+    A[2][1] = ge
+    A[2][3] = geb
 
     # Row 3: Q(CD,D)
-    A[3][4] = ge2
-    A[3][5] = gae
-    A[3][6] = gae
-    A[3][7] = ga2
+    A[3][5] = ge
+    A[3][7] = geb
 
     # Row 4: Q(DC,C)
-    A[4][0] = ge2
-    A[4][1] = gae
-    A[4][2] = gae
-    A[4][3] = ga2
+    A[4][1] = ge
+    A[4][3] = geb
 
     # Row 5: Q(DC,D)
-    A[5][4] = ge2
-    A[5][5] += gae
-    A[5][6] = gae
-    A[5][7] = ga2
+    A[5][5] += ge
+    A[5][7] = geb
 
     # Row 6: Q(DD,C)
-    A[6][0] = ge2
-    A[6][1] = gae
-    A[6][2] = gae
-    A[6][3] = ga2
+    A[6][1] = ge
+    A[6][3] = geb
 
     # Row 7: Q(DD,D)
-    A[7][4] = ge2
-    A[7][5] = gae
-    A[7][6] = gae
-    A[7][7] += ga2
+    A[7][5] = ge
+    A[7][7] += geb
 
     # Solve the system
     q_vals = np.linalg.solve(A, b)
@@ -161,10 +145,9 @@ def solve_q_values_all_defect(R, S, T, P, gamma, epsilon):
 
     return q
 
-def solve_q_values_pavlov(R, S, T, P, gamma, epsilon):
-    ge2 = - gamma * epsilon**2
-    gae = - gamma * epsilon * (1 - epsilon)
-    ga2 = - gamma * (1 - epsilon)**2
+def solve_q_values_WSLS(R, S, T, P, gamma, epsilon):
+    ge = - gamma * epsilon
+    geb = - gamma * (1 - epsilon)
 
     # Map from flat indices to (state, action)
     idx_to_state_action = [
@@ -181,54 +164,99 @@ def solve_q_values_pavlov(R, S, T, P, gamma, epsilon):
     A = np.eye(8)
     b = np.array([R, R, S, S, T, T, P, P])
 
-    # Fill in A matrix using Pavlov transition structure
     # Row 0: Q(CC,C)
-    A[0][0] += ga2
-    A[0][1] = gae
-    A[0][2] = ge2
-    A[0][3] = gae
+    A[0][0] += geb
+    A[0][3] = ge
 
     # Row 1: Q(CC,D)
-    A[1][4] = gae
-    A[1][5] = ga2
-    A[1][6] = gae
-    A[1][7] = ge2
+    A[1][5] = geb
+    A[1][6] = ge
 
     # Row 2: Q(CD,C)
-    A[2][0] = gae
-    A[2][1] = ge2
-    A[2][2] += gae
-    A[2][3] = ga2
+    A[2][0] = ge
+    A[2][3] = geb
 
     # Row 3: Q(CD,D)
-    A[3][4] = ge2
-    A[3][5] = gae
-    A[3][6] = ga2
-    A[3][7] = gae
-    
+    A[3][5] = ge
+    A[3][6] = geb
+
     # Row 4: Q(DC,C)
-    A[4][0] = gae
-    A[4][1] = ge2
-    A[4][2] = gae
-    A[4][3] = ga2
+    A[4][0] = ge
+    A[4][3] = geb
 
     # Row 5: Q(DC,D)
-    A[5][4] = ge2
-    A[5][5] += gae
-    A[5][6] = ga2
-    A[5][7] = gae
+    A[5][5] += ge
+    A[5][6] = geb
 
     # Row 6: Q(DD,C)
-    A[6][0] = ga2
-    A[6][1] = gae
-    A[6][2] = ge2
-    A[6][3] = gae
+    A[6][0] = geb
+    A[6][3] = ge
 
     # Row 7: Q(DD,D)
-    A[7][4] = gae
-    A[7][5] = ga2
-    A[7][6] = gae
-    A[7][7] += ge2
+    A[7][5] = geb
+    A[7][6] = ge
+
+    # Solve the system
+    q_vals = np.linalg.solve(A, b)
+
+    # Build nested dictionary
+    q = {'CC': {}, 'CD': {}, 'DC': {}, 'DD': {}}
+    for i, (state, action) in enumerate(idx_to_state_action):
+        q[state][action] = q_vals[i]
+
+    return q
+
+
+def solve_q_values_GT(R, S, T, P, gamma, epsilon):
+    ge = - gamma * epsilon
+    geb = - gamma * (1 - epsilon)
+
+    # Map from flat indices to (state, action)
+    idx_to_state_action = [
+        ('CC', 'C'),
+        ('CC', 'D'),
+        ('CD', 'C'),
+        ('CD', 'D'),
+        ('DC', 'C'),
+        ('DC', 'D'),
+        ('DD', 'C'),
+        ('DD', 'D')
+    ]
+
+    A = np.eye(8)
+    b = np.array([R, R, S, S, T, T, P, P])
+
+    # Row 0: Q(CC,C)
+    A[0][0] += geb
+    A[0][3] = ge
+
+    # Row 1: Q(CC,D)
+    A[1][5] = geb
+    A[1][6] = ge
+
+    # Row 2: Q(CD,C)
+    A[2][0] = ge
+    A[2][3] = geb
+
+    # Row 3: Q(CD,D)
+    A[3][5] = ge
+    A[3][7] = geb
+
+    # Row 4: Q(DC,C)
+    A[4][0] = ge
+    A[4][3] = geb
+
+    # Row 5: Q(DC,D)
+    A[5][5] += ge
+    A[5][7] = geb
+
+    # Row 6: Q(DD,C)
+    A[6][0] = ge
+    A[6][3] = geb
+
+    # Row 7: Q(DD,D)
+    A[7][5] = ge
+    A[7][7] += geb
 
     # Solve the system
     q_vals = np.linalg.solve(A, b)
@@ -261,13 +289,13 @@ class QLearningAgent:
         self.gamma = gamma
         self.fixed_policy = fixed_policy
         self.Q = {}
-        for state in states:
-            self.Q[state] = {'C': 1.0/(1-GAMMA), 'D': 1.0/(1-GAMMA)}
-        #if not init_Q:
-        #    self.Q = init_Q
-        #else:
-        #    for state in states:
-        #        self.Q[state] = {'C': 1.0/(1-GAMMA), 'D': 1.0/(1-GAMMA)}
+        if init_Q is not None:
+            self.Q = init_Q
+            print("Use given Q",init_Q)
+        else:
+            for state in states:
+                self.Q[state] = {'C': 1.0/(1-GAMMA), 'D': 1.0/(1-GAMMA)}
+            print("Use optimistic Q")
     
     def get_action(self, state):
         # If a fixed policy is set, always use it.
@@ -307,14 +335,23 @@ class QLearningAgent:
 # If fix_p1 (or fix_p2) is True, that player's get_action will always return the fixed policy,
 # and its Q-values will not be updated.
 # -------------------------------
+if args.initstra=='AD':
+    init_Q_given = solve_q_values_AD(R, S, T, P, GAMMA, EPSILON)
+elif args.initstra=='WSLS':
+    init_Q_given = solve_q_values_WSLS(R, S, T, P, GAMMA, EPSILON)
+elif args.initstra=='GT':
+    init_Q_given = solve_q_values_GT(R, S, T, P, GAMMA, EPSILON)
+else:
+    init_Q_given = None
 agent1 = QLearningAgent(epsilon=EPSILON, alpha=ALPHA, gamma=GAMMA,
                         fixed_policy=None,
                         init_policy=None,
-                        init_Q=solve_q_values_pavlov(R, S, T, P, GAMMA, EPSILON))
+                        init_Q=init_Q_given)
 agent2 = QLearningAgent(epsilon=EPSILON, alpha=ALPHA, gamma=GAMMA,
                         fixed_policy=None,
                         init_policy=None,
-                        init_Q=solve_q_values_pavlov(R, S, T, P, GAMMA, EPSILON))
+                        init_Q=init_Q_given)
+
 
 # -------------------------------
 # Initialize the starting state.
