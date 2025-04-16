@@ -507,16 +507,16 @@ for state in sorted(states):
 # The non-"DD" policies are printed first, then a separator, then the "DD" policies.
 # -------------------------------
 
-print("Transition count up to 1000:")
+print("\nTransition count up to 1000:")
 for state in states: 
     for nstate in states: 
         print(state, "-->", nstate, " : ", transition_count[state][nstate], 
-              " ( ", transition_count[state][nstate] / sum(transition_count[state].values())  ," ) ")
+              " ( ", transition_count[state][nstate] / sum(transition_count[state].values()) if sum(transition_count[state].values())>0 else "NA" ," ) ")
 
 
 print("Value sum up to 1000:")
 for state in states: 
-    print(state, value_sum[state] / value_count[state])
+    print(state, value_sum[state] / value_count[state] if value_count[state]>0 else "NA")
 
 print("Learned joint policy (P1, P2):")
 for state in non_dd_states:
@@ -554,20 +554,20 @@ axes[1].legend()
 
 for state in states: 
     for action in ['C', 'D']: 
-       axes[2].plot(Q1[state][action][:500000], label=state + ',' + action, alpha=0.7, linewidth=0.5)
+       axes[2].plot(Q1[state][action][:500000], label=state + ',' + action, alpha=0.7, linewidth=1)
 # axes[2].set_xlabel("Rounds")
 axes[2].set_ylabel("Q1(s,a)")
 axes[2].set_title("Q1(s,a)")
-axes[2].set_ylim(0.0, 10.0)  # Set y-axis range
-axes[2].legend(fontsize=4, markerscale=0.1, frameon=False, handlelength=1, loc="upper right", bbox_to_anchor=(1, 1))
+#axes[2].set_ylim(0.0, 10.0)  # Set y-axis range
+axes[2].legend(fontsize=6, markerscale=0.1, frameon=True, handlelength=2, loc="upper right", bbox_to_anchor=(1, 1))
 
 for state in states: 
     for action in ['C', 'D']: 
-       axes[3].plot(Q2[state][action][:500000], label=state + ',' + action, alpha=0.7, linewidth=0.5)
+       axes[3].plot(Q2[state][action][:500000], label=state + ',' + action, alpha=0.7, linewidth=1)
 axes[3].set_ylabel("Q2(s,a)")
 axes[3].set_title("Q2(s,a)")
-axes[3].set_ylim(0.0, 10.0)  # Set y-axis range
-axes[3].legend(fontsize=4, markerscale=0.1, frameon=False, handlelength=1, loc="upper right", bbox_to_anchor=(1, 1))
+#axes[3].set_ylim(0.0, 10.0)  # Set y-axis range
+axes[3].legend(fontsize=6, markerscale=0.1, frameon=True, handlelength=2, loc="upper right", bbox_to_anchor=(1, 1))
 
 # Fourth "plot" (Displaying text output)
 #axes[3].axis("off")  # Hide axes for text display
