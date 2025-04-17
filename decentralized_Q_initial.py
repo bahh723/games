@@ -17,6 +17,8 @@ parser.add_argument("--memory", type=int, required=True, help="number of memory"
 parser.add_argument("--type", type=str, required=True, help="type of game (on or off)")
 parser.add_argument("--rounds", type=int, default=400000, help="type of game (on or off)")
 parser.add_argument("--initstra", type=str, default='None', help="Initial strategy ('AD', 'WSLS', 'GT')")
+parser.add_argument("--al", type=float, default=0.1, help="alpha parameter in Q learning")
+parser.add_argument("--ga", type=float, default=0.9, help="gamma parameter in Q learning")
 args = parser.parse_args()
 current_state = args.init
 # Create output directory if it doesn't exist
@@ -47,8 +49,8 @@ elif args.type == "on":
 # -------------------------------
 # Q-learning Parameters
 # -------------------------------
-ALPHA = 0.1      # Learning rate
-GAMMA = 0.9      # Discount factor
+ALPHA = args.al       # Learning rate
+GAMMA = args.ga       # Discount factor
 EPSILON = args.eps    # Exploration rate
 NUM_ROUNDS = args.rounds  # Total number of game rounds
 W = 50
@@ -336,11 +338,11 @@ class QLearningAgent:
 # and its Q-values will not be updated.
 # -------------------------------
 if args.initstra=='AD':
-    init_Q_given = solve_q_values_AD(R, S, T, P, GAMMA, EPSILON)
+    init_Q_given = solve_q_values_AD(R, S, T, P, GAMMA, EPSILON/2)
 elif args.initstra=='WSLS':
-    init_Q_given = solve_q_values_WSLS(R, S, T, P, GAMMA, EPSILON)
+    init_Q_given = solve_q_values_WSLS(R, S, T, P, GAMMA, EPSILON/2)
 elif args.initstra=='GT':
-    init_Q_given = solve_q_values_GT(R, S, T, P, GAMMA, EPSILON)
+    init_Q_given = solve_q_values_GT(R, S, T, P, GAMMA, EPSILON/2)
 else:
     init_Q_given = None
 agent1 = QLearningAgent(epsilon=EPSILON, alpha=ALPHA, gamma=GAMMA,
