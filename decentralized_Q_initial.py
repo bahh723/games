@@ -292,7 +292,7 @@ class QLearningAgent:
         self.fixed_policy = fixed_policy
         self.Q = {}
         if init_Q is not None:
-            self.Q = init_Q
+            self.Q = copy.deepcopy(init_Q)
             print("Use given Q",init_Q)
         else:
             for state in states:
