@@ -345,14 +345,26 @@ elif args.initstra=='GT':
     init_Q_given = solve_q_values_GT(R, S, T, P, GAMMA, EPSILON/2)
 else:
     init_Q_given = None
+if init_Q_given is None:
+    init_Q_P1 = None
+    init_Q_P2 = None
+else:
+    init_Q_P1 = copy.deepcopy(init_Q_given)
+    init_Q_P2 = {
+        'CC': copy.deepcopy(init_Q_given['CC']),
+        'DD': copy.deepcopy(init_Q_given['DD']),
+        'CD': copy.deepcopy(init_Q_given['DC']),
+        'DC': copy.deepcopy(init_Q_given['CD'])
+        }
+
 agent1 = QLearningAgent(epsilon=EPSILON, alpha=ALPHA, gamma=GAMMA,
                         fixed_policy=None,
                         init_policy=None,
-                        init_Q=init_Q_given)
+                        init_Q=init_Q_P1)
 agent2 = QLearningAgent(epsilon=EPSILON, alpha=ALPHA, gamma=GAMMA,
                         fixed_policy=None,
                         init_policy=None,
-                        init_Q=init_Q_given)
+                        init_Q=init_Q_P2)
 
 
 # -------------------------------
